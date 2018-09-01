@@ -45,6 +45,8 @@
 #include "medium.h"
 #include "material.h"
 
+namespace pbrt {
+
 // Interaction Declarations
 struct Interaction {
     // Interaction Public Methods
@@ -120,7 +122,8 @@ class SurfaceInteraction : public Interaction {
                        const Point2f &uv, const Vector3f &wo,
                        const Vector3f &dpdu, const Vector3f &dpdv,
                        const Normal3f &dndu, const Normal3f &dndv, Float time,
-                       const Shape *sh);
+                       const Shape *sh,
+                       int faceIndex = 0);
     void SetShadingGeometry(const Vector3f &dpdu, const Vector3f &dpdv,
                             const Normal3f &dndu, const Normal3f &dndv,
                             bool orientationIsAuthoritative);
@@ -146,6 +149,13 @@ class SurfaceInteraction : public Interaction {
     BSSRDF *bssrdf = nullptr;
     mutable Vector3f dpdx, dpdy;
     mutable Float dudx = 0, dvdx = 0, dudy = 0, dvdy = 0;
+
+    // Added after book publication. Shapes can optionally provide a face
+    // index with an intersection point for use in Ptex texture lookups.
+    // If Ptex isn't being used, then this value is ignored.
+    int faceIndex = 0;
 };
+
+}  // namespace pbrt
 
 #endif  // PBRT_CORE_INTERACTION_H

@@ -39,6 +39,8 @@
 #include "reflection.h"
 #include "stats.h"
 
+namespace pbrt {
+
 // ProjectionLight Method Definitions
 ProjectionLight::ProjectionLight(const Transform &LightToWorld,
                                  const MediumInterface &mediumInterface,
@@ -65,10 +67,10 @@ ProjectionLight::ProjectionLight(const Transform &LightToWorld,
     yon = 1e30f;
     lightProjection = Perspective(fov, hither, yon);
 
-    // Compute cosine of cone surrounding projection directions
-    Float opposite = std::tan(Radians(fov) / 2.f);
-    Float tanDiag = opposite * std::sqrt(1 + 1 / (aspect * aspect));
-    cosTotalWidth = std::cos(std::atan(tanDiag));
+    Transform screenToLight = Inverse(lightProjection);
+    Point3f pCorner(screenBounds.pMax.x, screenBounds.pMax.y, 0);
+    Vector3f wCorner = Normalize(Vector3f(screenToLight(pCorner)));
+    cosTotalWidth = wCorner.z;
 }
 
 Spectrum ProjectionLight::Sample_Li(const Interaction &ref, const Point2f &u,
@@ -113,7 +115,7 @@ Spectrum ProjectionLight::Sample_Le(const Point2f &u1, const Point2f &u2,
     ProfilePhase _(Prof::LightSample);
     Vector3f v = UniformSampleCone(u1, cosTotalWidth);
     *ray = Ray(pLight, LightToWorld(v), Infinity, time, mediumInterface.inside);
-    *nLight = (Normal3f)ray->d;  /// same here
+    *nLight = (Normal3f)ray->d;
     *pdfPos = 1.f;
     *pdfDir = UniformConePdf(cosTotalWidth);
     return I * Projection(ray->d);
@@ -138,3 +140,5 @@ std::shared_ptr<ProjectionLight> CreateProjectionLight(
     return std::make_shared<ProjectionLight>(light2world, medium, I * sc,
                                              texname, fov);
 }
+
+}  // namespace pbrt

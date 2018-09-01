@@ -42,11 +42,14 @@
 #include "sampler.h"
 #include "lowdiscrepancy.h"
 
+namespace pbrt {
+
 // HaltonSampler Declarations
 class HaltonSampler : public GlobalSampler {
   public:
     // HaltonSampler Public Methods
-    HaltonSampler(int nsamp, const Bounds2i &sampleBounds);
+    HaltonSampler(int nsamp, const Bounds2i &sampleBounds,
+                  bool sampleAtCenter = false);
     int64_t GetIndexForSample(int64_t sampleNum) const;
     Float SampleDimension(int64_t index, int dimension) const;
     std::unique_ptr<Sampler> Clone(int seed);
@@ -60,6 +63,9 @@ class HaltonSampler : public GlobalSampler {
     mutable Point2i pixelForOffset = Point2i(std::numeric_limits<int>::max(),
                                              std::numeric_limits<int>::max());
     mutable int64_t offsetForCurrentPixel;
+    // Added after book publication: force all image samples to be at the
+    // center of the pixel area.
+    bool sampleAtPixelCenter;
 
     // HaltonSampler Private Methods
     const uint16_t *PermutationForDimension(int dim) const {
@@ -72,5 +78,7 @@ class HaltonSampler : public GlobalSampler {
 
 HaltonSampler *CreateHaltonSampler(const ParamSet &params,
                                    const Bounds2i &sampleBounds);
+
+}  // namespace pbrt
 
 #endif  // PBRT_SAMPLERS_HALTON_H

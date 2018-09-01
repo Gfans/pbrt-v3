@@ -45,6 +45,8 @@
 #include "shape.h"
 #include "spectrum.h"
 
+namespace pbrt {
+
 // Reflection Declarations
 Float FrDielectric(Float cosThetaI, Float etaI, Float etaT);
 Spectrum FrConductor(Float cosThetaI, const Spectrum &etaI,
@@ -356,7 +358,6 @@ class FresnelSpecular : public BxDF {
           T(T),
           etaA(etaA),
           etaB(etaB),
-          fresnel(etaA, etaB),
           mode(mode) {}
     Spectrum f(const Vector3f &wo, const Vector3f &wi) const {
         return Spectrum(0.f);
@@ -370,7 +371,6 @@ class FresnelSpecular : public BxDF {
     // FresnelSpecular Private Data
     const Spectrum R, T;
     const Float etaA, etaB;
-    const FresnelDielectric fresnel;
     const TransportMode mode;
 };
 
@@ -523,5 +523,7 @@ inline int BSDF::NumComponents(BxDFType flags) const {
         if (bxdfs[i]->MatchesFlags(flags)) ++num;
     return num;
 }
+
+}  // namespace pbrt
 
 #endif  // PBRT_CORE_REFLECTION_H

@@ -49,6 +49,13 @@
 #include "sampling.h"
 #include "scene.h"
 
+namespace pbrt {
+
+/// Forward declaration (correction term for adjoint BSDF with shading normals)
+extern Float CorrectShadingNormal(const SurfaceInteraction &isect,
+                                  const Vector3f &wo, const Vector3f &wi,
+                                  TransportMode mode);
+
 // EndpointInteraction Declarations
 struct EndpointInteraction : Interaction {
     union {
@@ -149,11 +156,11 @@ struct Vertex {
     // Vertex Public Data
     VertexType type;
     Spectrum beta;
-#ifdef PBRT_IS_MSVC2013
-    struct {
-#else
+#ifdef PBRT_HAVE_NONPOD_IN_UNIONS
     union {
-#endif  // PBRT_IS_MSVC2013
+#else
+    struct {
+#endif  // PBRT_HAVE_NONPOD_IN_UNIONS
         EndpointInteraction ei;
         MediumInteraction mi;
         SurfaceInteraction si;
@@ -214,13 +221,14 @@ struct Vertex {
             return GetInteraction().n;
     }
     bool IsOnSurface() const { return ng() != Normal3f(); }
-    Spectrum f(const Vertex &next) const {
+    Spectrum f(const Vertex &next, TransportMode mode) const {
         Vector3f wi = next.p() - p();
         if (wi.LengthSquared() == 0) return 0.;
         wi = Normalize(wi);
         switch (type) {
         case VertexType::Surface:
-            return si.bsdf->f(si.wo, wi);
+            return si.bsdf->f(si.wo, wi) *
+                CorrectShadingNormal(si, si.wo, wi, mode);
         case VertexType::Medium:
             return mi.phase->p(mi.wo, wi);
         default:
@@ -250,7 +258,7 @@ struct Vertex {
     }
     bool IsDeltaLight() const {
         return type == VertexType::Light && ei.light &&
-               ::IsDeltaLight(ei.light->flags);
+               pbrt::IsDeltaLight(ei.light->flags);
     }
     bool IsInfiniteLight() const {
         return type == VertexType::Light &&
@@ -270,7 +278,7 @@ struct Vertex {
             return Le;
         } else {
             const AreaLight *light = si.primitive->GetAreaLight();
-            CHECK_NOTNULL(light);
+            CHECK(light != nullptr);
             return light->L(si, w);
         }
     }
@@ -372,11 +380,11 @@ struct Vertex {
             const Light *light = type == VertexType::Light
                                      ? ei.light
                                      : si.primitive->GetAreaLight();
-            CHECK_NOTNULL(light);
+            CHECK(light != nullptr);
 
             // Compute sampling density for non-infinite light sources
             Float pdfPos, pdfDir;
-            light->Pdf_Le(Ray(p(), w, time()), ng(), &pdfPos, &pdfDir);
+            light->Pdf_Le(Ray(p(), w, Infinity, time()), ng(), &pdfPos, &pdfDir);
             pdf = pdfDir * invDist2;
         }
         if (v.IsOnSurface()) pdf *= AbsDot(v.ng(), w);
@@ -402,14 +410,14 @@ struct Vertex {
             const Light *light = type == VertexType::Light
                                      ? ei.light
                                      : si.primitive->GetAreaLight();
-            CHECK_NOTNULL(light);
+            CHECK(light != nullptr);
 
             // Compute the discrete probability of sampling _light_, _pdfChoice_
             CHECK(lightToDistrIndex.find(light) != lightToDistrIndex.end());
             size_t index = lightToDistrIndex.find(light)->second;
             pdfChoice = lightDistr.DiscretePDF(index);
 
-            light->Pdf_Le(Ray(p(), w, time()), ng(), &pdfPos, &pdfDir);
+            light->Pdf_Le(Ray(p(), w, Infinity, time()), ng(), &pdfPos, &pdfDir);
             return pdfPos * pdfChoice;
         }
     }
@@ -476,5 +484,7 @@ inline Vertex Vertex::CreateLight(const EndpointInteraction &ei,
     v.pdfFwd = pdf;
     return v;
 }
+
+}  // namespace pbrt
 
 #endif  // PBRT_INTEGRATORS_BDPT_H

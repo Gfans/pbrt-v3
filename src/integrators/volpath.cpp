@@ -40,14 +40,16 @@
 #include "scene.h"
 #include "stats.h"
 
-STAT_FLOAT_DISTRIBUTION("Integrator/Path length", pathLength);
+namespace pbrt {
+
+STAT_INT_DISTRIBUTION("Integrator/Path length", pathLength);
 STAT_COUNTER("Integrator/Volume interactions", volumeInteractions);
 STAT_COUNTER("Integrator/Surface interactions", surfaceInteractions);
 
 // VolPathIntegrator Method Definitions
 void VolPathIntegrator::Preprocess(const Scene &scene, Sampler &sampler) {
-    lightDistribution = CreateLightSampleDistribution(lightSampleStrategy,
-                                                      scene);
+    lightDistribution =
+        CreateLightSampleDistribution(lightSampleStrategy, scene);
 }
 
 Spectrum VolPathIntegrator::Li(const RayDifferential &r, const Scene &scene,
@@ -58,6 +60,15 @@ Spectrum VolPathIntegrator::Li(const RayDifferential &r, const Scene &scene,
     RayDifferential ray(r);
     bool specularBounce = false;
     int bounces;
+    // Added after book publication: etaScale tracks the accumulated effect
+    // of radiance scaling due to rays passing through refractive
+    // boundaries (see the derivation on p. 527 of the third edition). We
+    // track this value in order to remove it from beta when we apply
+    // Russian roulette; this is worthwhile, since it lets us sometimes
+    // avoid terminating refracted rays that are about to be refracted back
+    // out of a medium and thus have their beta value increased.
+    Float etaScale = 1;
+
     for (bounces = 0;; ++bounces) {
         // Intersect _ray_ with scene and store intersection in _isect_
         SurfaceInteraction isect;
@@ -83,6 +94,7 @@ Spectrum VolPathIntegrator::Li(const RayDifferential &r, const Scene &scene,
             Vector3f wo = -ray.d, wi;
             mi.phase->Sample_p(wo, &wi, sampler.Get2D());
             ray = mi.SpawnRay(wi);
+            specularBounce = false;
         } else {
             ++surfaceInteractions;
             // Handle scattering at point on surface for volumetric path tracer
@@ -112,9 +124,8 @@ Spectrum VolPathIntegrator::Li(const RayDifferential &r, const Scene &scene,
             // contribution
             const Distribution1D *lightDistrib =
                 lightDistribution->Lookup(isect.p);
-            L += beta *
-                UniformSampleOneLight(isect, scene, arena, sampler, true,
-                                      lightDistrib);
+            L += beta * UniformSampleOneLight(isect, scene, arena, sampler,
+                                              true, lightDistrib);
 
             // Sample BSDF to get new path direction
             Vector3f wo = -ray.d, wi;
@@ -126,6 +137,14 @@ Spectrum VolPathIntegrator::Li(const RayDifferential &r, const Scene &scene,
             beta *= f * AbsDot(wi, isect.shading.n) / pdf;
             DCHECK(std::isinf(beta.y()) == false);
             specularBounce = (flags & BSDF_SPECULAR) != 0;
+            if ((flags & BSDF_SPECULAR) && (flags & BSDF_TRANSMISSION)) {
+                Float eta = isect.bsdf->eta;
+                // Update the term that tracks radiance scaling for refraction
+                // depending on whether the ray is entering or leaving the
+                // medium.
+                etaScale *=
+                    (Dot(wo, isect.n) > 0) ? (eta * eta) : 1 / (eta * eta);
+            }
             ray = isect.SpawnRay(wi);
 
             // Account for attenuated subsurface scattering, if applicable
@@ -156,8 +175,10 @@ Spectrum VolPathIntegrator::Li(const RayDifferential &r, const Scene &scene,
         }
 
         // Possibly terminate the path with Russian roulette
-        if (beta.y() < rrThreshold && bounces > 3) {
-            Float q = std::max((Float).05, 1 - beta.MaxComponentValue());
+        // Factor out radiance scaling due to refraction in rrBeta.
+        Spectrum rrBeta = beta * etaScale;
+        if (rrBeta.MaxComponentValue() < rrThreshold && bounces > 3) {
+            Float q = std::max((Float).05, 1 - rrBeta.MaxComponentValue());
             if (sampler.Get1D() < q) break;
             beta /= 1 - q;
             DCHECK(std::isinf(beta.y()) == false);
@@ -186,8 +207,10 @@ VolPathIntegrator *CreateVolPathIntegrator(
         }
     }
     Float rrThreshold = params.FindOneFloat("rrthreshold", 1.);
-    std::string lightStrategy = params.FindOneString("lightsamplestrategy",
-                                                     "spatial");
+    std::string lightStrategy =
+        params.FindOneString("lightsamplestrategy", "spatial");
     return new VolPathIntegrator(maxDepth, camera, sampler, pixelBounds,
                                  rrThreshold, lightStrategy);
 }
+
+}  // namespace pbrt

@@ -40,6 +40,8 @@
 #include <ImfRgba.h>
 #include <ImfRgbaFile.h>
 
+namespace pbrt {
+
 // ImageIO Local Declarations
 static void WriteImageEXR(const std::string &name, const Float *pixels,
                           int xRes, int yRes, int totalXRes, int totalYRes,
@@ -268,8 +270,8 @@ static RGBSpectrum *ReadImagePNG(const std::string &name, int *width,
 
     RGBSpectrum *ret = new RGBSpectrum[*width * *height];
     unsigned char *src = rgb;
-    for (int y = 0; y < h; ++y) {
-        for (int x = 0; x < w; ++x, src += 3) {
+    for (unsigned int y = 0; y < h; ++y) {
+        for (unsigned int x = 0; x < w; ++x, src += 3) {
             Float c[3];
             c[0] = src[0] / 255.f;
             c[1] = src[1] / 255.f;
@@ -290,7 +292,7 @@ static RGBSpectrum *ReadImagePNG(const std::string &name, int *width,
  * (http://people.csail.mit.edu/jiawen/)
  */
 
-static bool hostLittleEndian =
+static PBRT_CONSTEXPR bool hostLittleEndian =
 #if defined(__BYTE_ORDER__)
   #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     true
@@ -301,7 +303,7 @@ static bool hostLittleEndian =
   #endif
 #else
   #if defined(__LITTLE_ENDIAN__) || defined(__i386__) || defined(__x86_64__) || \
-      defined(WIN32)
+      defined(_WIN32) || defined(WIN32)
     true
   #elif defined(__BIG_ENDIAN__)
     false
@@ -319,12 +321,10 @@ static inline int isWhitespace(char c) {
     return c == ' ' || c == '\n' || c == '\t';
 }
 
-// reads a "word" from the fp and puts it into buffer
-// and adds a null terminator
-// i.e. it keeps reading until a whitespace is reached
-// returns the number of characters read
-// *not* including the whitespace
-// return -1 on an error
+// Reads a "word" from the fp and puts it into buffer and adds a null
+// terminator.  i.e. it keeps reading until whitespace is reached.  Returns
+// the number of characters read *not* including the whitespace, and
+// returns -1 on an error.
 static int readWord(FILE *fp, char *buffer, int bufferLength) {
     int n;
     int c;
@@ -480,3 +480,5 @@ fail:
     fclose(fp);
     return false;
 }
+
+}  // namespace pbrt

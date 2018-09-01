@@ -34,6 +34,8 @@
 #include "microfacet.h"
 #include "reflection.h"
 
+namespace pbrt {
+
 // Microfacet Utility Functions
 static void BeckmannSample11(Float cosThetaI, Float U1, Float U2,
                              Float *slope_x, Float *slope_y) {
@@ -199,15 +201,15 @@ Vector3f BeckmannDistribution::Sample_wh(const Vector3f &wo,
         // Compute $\tan^2 \theta$ and $\phi$ for Beckmann distribution sample
         Float tan2Theta, phi;
         if (alphax == alphay) {
-            Float logSample = std::log(u[0]);
-            if (std::isinf(logSample)) logSample = 0;
+            Float logSample = std::log(1 - u[0]);
+            DCHECK(!std::isinf(logSample));
             tan2Theta = -alphax * alphax * logSample;
             phi = u[1] * 2 * Pi;
         } else {
             // Compute _tan2Theta_ and _phi_ for anisotropic Beckmann
             // distribution
-            Float logSample = std::log(u[0]);
-            if (std::isinf(logSample)) logSample = 0;
+            Float logSample = std::log(1 - u[0]);
+            DCHECK(!std::isinf(logSample));
             phi = std::atan(alphay / alphax *
                             std::tan(2 * Pi * u[1] + 0.5f * Pi));
             if (u[1] > 0.5f) phi += Pi;
@@ -340,3 +342,5 @@ Float MicrofacetDistribution::Pdf(const Vector3f &wo,
     else
         return D(wh) * AbsCosTheta(wh);
 }
+
+}  // namespace pbrt

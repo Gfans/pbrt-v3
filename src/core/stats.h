@@ -44,6 +44,9 @@
 #include <chrono>
 #include <string>
 #include <functional>
+#include <mutex>
+
+namespace pbrt {
 
 // Statistics Declarations
 class StatsAccumulator;
@@ -51,6 +54,8 @@ class StatRegisterer {
   public:
     // StatRegisterer Public Methods
     StatRegisterer(std::function<void(StatsAccumulator &)> func) {
+        static std::mutex mutex;
+        std::lock_guard<std::mutex> lock(mutex);
         if (!funcs)
             funcs = new std::vector<std::function<void(StatsAccumulator &)>>;
         funcs->push_back(func);
@@ -145,8 +150,10 @@ enum class Prof {
     SPPMGridConstruction,
     SPPMPhotonPass,
     SPPMStatsUpdate,
+    BDPTGenerateSubpath,
+    BDPTConnectSubpaths,
     LightDistribLookup,
-    LightDistribLookupL2,
+    LightDistribSpinWait,
     LightDistribCreation,
     DirectLighting,
     BSDFEvaluation,
@@ -154,10 +161,14 @@ enum class Prof {
     BSDFPdf,
     BSSRDFEvaluation,
     BSSRDFSampling,
+    PhaseFuncEvaluation,
+    PhaseFuncSampling,
     AccelIntersect,
     AccelIntersectP,
     LightSample,
     LightPdf,
+    MediumSample,
+    MediumTr,
     TriIntersect,
     TriIntersectP,
     CurveIntersect,
@@ -168,9 +179,12 @@ enum class Prof {
     GenerateCameraRay,
     MergeFilmTile,
     SplatFilm,
+    AddFilmSample,
     StartPixel,
+    GetSample,
     TexFiltTrilerp,
     TexFiltEWA,
+    TexFiltPtex,
     NumProfCategories
 };
 
@@ -191,8 +205,10 @@ static const char *ProfNames[] = {
     "SPPM grid construction",
     "SPPM photon pass",
     "SPPM photon statistics update",
+    "BDPT subpath generation",
+    "BDPT subpath connections",
     "SpatialLightDistribution lookup",
-    "SpatialLightDistribution global lookup",
+    "SpatialLightDistribution spin wait",
     "SpatialLightDistribution creation",
     "Direct lighting",
     "BSDF::f()",
@@ -200,10 +216,14 @@ static const char *ProfNames[] = {
     "BSDF::PDF()",
     "BSSRDF::f()",
     "BSSRDF::Sample_f()",
+    "PhaseFunction::p()",
+    "PhaseFunction::Sample_p()",
     "Accelerator::Intersect()",
     "Accelerator::IntersectP()",
     "Light::Sample_*()",
     "Light::Pdf()",
+    "Medium::Sample()",
+    "Medium::Tr()",
     "Triangle::Intersect()",
     "Triangle::IntersectP()",
     "Curve::Intersect()",
@@ -214,9 +234,12 @@ static const char *ProfNames[] = {
     "Camera::GenerateRay[Differential]()",
     "Film::MergeTile()",
     "Film::AddSplat()",
+    "Film::AddSample()",
     "Sampler::StartPixelSample()",
+    "Sampler::GetSample[12]D()",
     "MIPMap::Lookup() (trilinear)",
     "MIPMap::Lookup() (EWA)",
+    "Ptex lookup",
 };
 
 static_assert((int)Prof::NumProfCategories ==
@@ -271,8 +294,7 @@ void CleanupProfiler();
     }                                                      \
     static StatRegisterer STATS_REG##var(STATS_FUNC##var)
 
-// Work around lack of support for constexpr in VS2013.
-#ifdef PBRT_IS_MSVC2013
+#ifndef PBRT_HAVE_CONSTEXPR
 #define STATS_INT64_T_MIN LLONG_MAX
 #define STATS_INT64_T_MAX _I64_MIN
 #define STATS_DBL_T_MIN DBL_MAX
@@ -337,5 +359,7 @@ void CleanupProfiler();
         numVar = denomVar = 0;                                \
     }                                                         \
     static StatRegisterer STATS_REG##numVar(STATS_FUNC##numVar)
+
+}  // namespace pbrt
 
 #endif  // PBRT_CORE_STATS_H

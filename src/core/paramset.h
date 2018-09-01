@@ -47,6 +47,8 @@
 #include <stdio.h>
 #include <map>
 
+namespace pbrt {
+
 // ParamSet Declarations
 class ParamSet {
   public:
@@ -119,6 +121,9 @@ class ParamSet {
     void Print(int indent) const;
 
   private:
+    friend class TextureParams;
+    friend bool shapeMaySetMaterialParameters(const ParamSet &ps);
+
     // ParamSet Private Data
     std::vector<std::shared_ptr<ParamSetItem<bool>>> bools;
     std::vector<std::shared_ptr<ParamSetItem<int>>> ints;
@@ -207,10 +212,7 @@ class TextureParams {
         return geomParams.FindOneSpectrum(n,
                                           materialParams.FindOneSpectrum(n, d));
     }
-    void ReportUnused() const {
-        geomParams.ReportUnused();
-        materialParams.ReportUnused();
-    }
+    void ReportUnused() const;
     const ParamSet &GetGeomParams() const { return geomParams; }
     const ParamSet &GetMaterialParams() const { return materialParams; }
 
@@ -220,5 +222,7 @@ class TextureParams {
     std::map<std::string, std::shared_ptr<Texture<Spectrum>>> &spectrumTextures;
     const ParamSet &geomParams, &materialParams;
 };
+
+}  // namespace pbrt
 
 #endif  // PBRT_CORE_PARAMSET_H

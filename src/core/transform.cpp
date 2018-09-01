@@ -35,6 +35,8 @@
 #include "transform.h"
 #include "interaction.h"
 
+namespace pbrt {
+
 // Matrix4x4 Method Definitions
 bool SolveLinearSystem2x2(const Float A[2][2], const Float B[2], Float *x0,
                           Float *x1) {
@@ -216,11 +218,11 @@ Transform LookAt(const Point3f &pos, const Point3f &look, const Vector3f &up) {
             up.x, up.y, up.z, dir.x, dir.y, dir.z);
         return Transform();
     }
-    Vector3f left = Normalize(Cross(Normalize(up), dir));
-    Vector3f newUp = Cross(dir, left);
-    cameraToWorld.m[0][0] = left.x;
-    cameraToWorld.m[1][0] = left.y;
-    cameraToWorld.m[2][0] = left.z;
+    Vector3f right = Normalize(Cross(Normalize(up), dir));
+    Vector3f newUp = Cross(dir, right);
+    cameraToWorld.m[0][0] = right.x;
+    cameraToWorld.m[1][0] = right.y;
+    cameraToWorld.m[2][0] = right.z;
     cameraToWorld.m[3][0] = 0.;
     cameraToWorld.m[0][1] = newUp.x;
     cameraToWorld.m[1][1] = newUp.y;
@@ -290,6 +292,7 @@ SurfaceInteraction Transform::operator()(const SurfaceInteraction &si) const {
     ret.primitive = si.primitive;
     //    ret.n = Faceforward(ret.n, ret.shading.n);
     ret.shading.n = Faceforward(ret.shading.n, ret.n);
+    ret.faceIndex = si.faceIndex;
     return ret;
 }
 
@@ -399,6 +402,8 @@ AnimatedTransform::AnimatedTransform(const Transform *startTransform,
       startTime(startTime),
       endTime(endTime),
       actuallyAnimated(*startTransform != *endTransform) {
+    if (!actuallyAnimated)
+        return;
     Decompose(startTransform->m, &T[0], &R[0], &S[0]);
     Decompose(endTransform->m, &T[1], &R[1], &S[1]);
     // Flip _R[1]_ if needed to select shortest path
@@ -1240,3 +1245,5 @@ Bounds3f AnimatedTransform::BoundPointMotion(const Point3f &p) const {
     }
     return bounds;
 }
+
+}  // namespace pbrt

@@ -41,6 +41,8 @@
 #include "sampler.h"
 #include "stats.h"
 
+namespace pbrt {
+
 STAT_PERCENT("Integrator/Zero-radiance paths", zeroRadiancePaths, totalPaths);
 STAT_INT_DISTRIBUTION("Integrator/Path length", pathLength);
 
@@ -55,10 +57,10 @@ Float CorrectShadingNormal(const SurfaceInteraction &isect, const Vector3f &wo,
     if (mode == TransportMode::Importance) {
         Float num = AbsDot(wo, isect.shading.n) * AbsDot(wi, isect.n);
         Float denom = AbsDot(wo, isect.n) * AbsDot(wi, isect.shading.n);
-        if (denom == 0) {
-            CHECK_EQ(num, 0);
-            return 0;
-        }
+        // wi is occasionally perpendicular to isect.shading.n; this is
+        // fine, but we don't want to return an infinite or NaN value in
+        // that case.
+        if (denom == 0) return 0;
         return num / denom;
     } else
         return 1;
@@ -69,6 +71,7 @@ int GenerateCameraSubpath(const Scene &scene, Sampler &sampler,
                           const Camera &camera, const Point2f &pFilm,
                           Vertex *path) {
     if (maxDepth == 0) return 0;
+    ProfilePhase _(Prof::BDPTGenerateSubpath);
     // Sample initial ray for camera subpath
     CameraSample cameraSample;
     cameraSample.pFilm = pFilm;
@@ -95,6 +98,7 @@ int GenerateLightSubpath(
     const std::unordered_map<const Light *, size_t> &lightToIndex,
     Vertex *path) {
     if (maxDepth == 0) return 0;
+    ProfilePhase _(Prof::BDPTGenerateSubpath);
     // Sample initial ray for light subpath
     Float lightPdf;
     int lightNum = lightDistr.SampleDiscrete(sampler.Get1D(), &lightPdf);
@@ -349,6 +353,8 @@ void BDPTIntegrator::Render(const Scene &scene) {
             int y0 = sampleBounds.pMin.y + tile.y * tileSize;
             int y1 = std::min(y0 + tileSize, sampleBounds.pMax.y);
             Bounds2i tileBounds(Point2i(x0, y0), Point2i(x1, y1));
+            LOG(INFO) << "Starting image tile " << tileBounds;
+
             std::unique_ptr<FilmTile> filmTile =
                 camera->film->GetFilmTile(tileBounds);
             for (Point2i pPixel : tileBounds) {
@@ -421,6 +427,7 @@ void BDPTIntegrator::Render(const Scene &scene) {
             }
             film->MergeFilmTile(std::move(filmTile));
             reporter.Update();
+            LOG(INFO) << "Finished image tile " << tileBounds;
         }, Point2i(nXTiles, nYTiles));
         reporter.Done();
     }
@@ -440,6 +447,7 @@ Spectrum ConnectBDPT(
     const std::unordered_map<const Light *, size_t> &lightToIndex,
     const Camera &camera, Sampler &sampler, Point2f *pRaster,
     Float *misWeightPtr) {
+    ProfilePhase _(Prof::BDPTConnectSubpaths);
     Spectrum L(0.f);
     // Ignore invalid connections related to infinite area lights
     if (t > 1 && s != 0 && cameraVertices[t - 1].type == VertexType::Light)
@@ -464,7 +472,7 @@ Spectrum ConnectBDPT(
             if (pdf > 0 && !Wi.IsBlack()) {
                 // Initialize dynamically sampled vertex and _L_ for $t=1$ case
                 sampled = Vertex::CreateCamera(&camera, vis.P1(), Wi / pdf);
-                L = qs.beta * qs.f(sampled) * sampled.beta;
+                L = qs.beta * qs.f(sampled, TransportMode::Importance) * sampled.beta;
                 if (qs.IsOnSurface()) L *= AbsDot(wi, qs.ns());
                 DCHECK(!L.HasNaNs());
                 // Only check visibility after we know that the path would
@@ -491,7 +499,7 @@ Spectrum ConnectBDPT(
                     Vertex::CreateLight(ei, lightWeight / (pdf * lightPdf), 0);
                 sampled.pdfFwd =
                     sampled.PdfLightOrigin(scene, pt, lightDistr, lightToIndex);
-                L = pt.beta * pt.f(sampled) * sampled.beta;
+                L = pt.beta * pt.f(sampled, TransportMode::Radiance) * sampled.beta;
                 if (pt.IsOnSurface()) L *= AbsDot(wi, pt.ns());
                 // Only check visibility if the path would carry radiance.
                 if (!L.IsBlack()) L *= vis.Tr(scene, sampler);
@@ -501,10 +509,10 @@ Spectrum ConnectBDPT(
         // Handle all other bidirectional connection cases
         const Vertex &qs = lightVertices[s - 1], &pt = cameraVertices[t - 1];
         if (qs.IsConnectible() && pt.IsConnectible()) {
-            L = qs.beta * qs.f(pt) * pt.f(qs) * pt.beta;
+            L = qs.beta * qs.f(pt, TransportMode::Importance) * pt.f(qs, TransportMode::Radiance) * pt.beta;
             VLOG(2) << "General connect s: " << s << ", t: " << t <<
-                " qs: " << qs << ", pt: " << pt << ", qs.f(pt): " << qs.f(pt) <<
-                ", pt.f(qs): " << pt.f(qs) << ", G: " << G(scene, sampler, qs, pt) <<
+                " qs: " << qs << ", pt: " << pt << ", qs.f(pt): " << qs.f(pt, TransportMode::Importance) <<
+                ", pt.f(qs): " << pt.f(qs, TransportMode::Radiance) << ", G: " << G(scene, sampler, qs, pt) <<
                 ", dist^2: " << DistanceSquared(qs.p(), pt.p());
             if (!L.IsBlack()) L *= G(scene, sampler, qs, pt);
         }
@@ -559,3 +567,5 @@ BDPTIntegrator *CreateBDPTIntegrator(const ParamSet &params,
     return new BDPTIntegrator(sampler, camera, maxDepth, visualizeStrategies,
                               visualizeWeights, pixelBounds, lightStrategy);
 }
+
+}  // namespace pbrt

@@ -51,6 +51,8 @@ http://pbrt.org/hair.pdf for a description of the implementation here.
 #include "reflection.h"
 #include <array>
 
+namespace pbrt {
+
 // HairMaterial Declarations
 class HairMaterial : public Material {
   public:
@@ -109,7 +111,7 @@ class HairBSDF : public BxDF {
     // HairBSDF Private Data
     const Float h, gammaO, eta;
     const Spectrum sigma_a;
-    const Float beta_m, beta_n, alpha;
+    const Float beta_m, beta_n;
     Float v[pMax + 1];
     Float s;
     Float sin2kAlpha[3], cos2kAlpha[3];
@@ -167,5 +169,7 @@ static Point2f DemuxFloat(Float f) {
     uint32_t bits[2] = {Compact1By1(v), Compact1By1(v >> 1)};
     return {bits[0] / Float(1 << 16), bits[1] / Float(1 << 16)};
 }
+
+}  // namespace pbrt
 
 #endif  // PBRT_MATERIALS_HAIR_H

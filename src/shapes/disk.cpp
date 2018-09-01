@@ -37,6 +37,8 @@
 #include "sampling.h"
 #include "stats.h"
 
+namespace pbrt {
+
 // Disk Method Definitions
 Bounds3f Disk::ObjectBound() const {
     return Bounds3f(Point3f(-radius, -radius, height),
@@ -75,7 +77,7 @@ bool Disk::Intersect(const Ray &r, Float *tHit, SurfaceInteraction *isect,
     Float v = 1 - oneMinusV;
     Vector3f dpdu(-phiMax * pHit.y, phiMax * pHit.x, 0);
     Vector3f dpdv =
-        Vector3f(pHit.x, pHit.y, 0.) * (innerRadius - radius) / rHit;
+        Vector3f(pHit.x, pHit.y, 0.) * (radius - innerRadius) / rHit;
     Normal3f dndu(0, 0, 0), dndv(0, 0, 0);
 
     // Refine disk intersection point
@@ -146,3 +148,5 @@ std::shared_ptr<Disk> CreateDiskShape(const Transform *o2w,
     return std::make_shared<Disk>(o2w, w2o, reverseOrientation, height, radius,
                                   inner_radius, phimax);
 }
+
+}  // namespace pbrt

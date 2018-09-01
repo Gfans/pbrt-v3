@@ -37,6 +37,8 @@
 #include "parallel.h"
 #include "scene.h"
 
+namespace pbrt {
+
 // BSSRDF Utility Functions
 Float FresnelMoment1(Float eta) {
     Float eta2 = eta * eta, eta3 = eta2 * eta, eta4 = eta3 * eta,
@@ -300,7 +302,11 @@ Spectrum SeparableBSSRDF::Sample_Sp(const Scene &scene, Float u1,
     // Accumulate chain of intersections along ray
     IntersectionChain *ptr = chain;
     int nFound = 0;
-    while (scene.Intersect(base.SpawnRayTo(pTarget), &ptr->si)) {
+    while (true) {
+        Ray r = base.SpawnRayTo(pTarget);
+        if (r.d == Vector3f(0, 0, 0) || !scene.Intersect(r, &ptr->si))
+            break;
+
         base = ptr->si;
         // Append admissible intersection to _IntersectionChain_
         if (ptr->si.primitive->GetMaterial() == this->material) {
@@ -382,3 +388,5 @@ Float TabulatedBSSRDF::Pdf_Sr(int ch, Float r) const {
     if (rOptical != 0) sr /= 2 * Pi * rOptical;
     return std::max((Float)0, sr * sigma_t[ch] * sigma_t[ch] / rhoEff);
 }
+
+}  // namespace pbrt

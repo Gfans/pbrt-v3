@@ -38,6 +38,8 @@
 #include "efloat.h"
 #include "stats.h"
 
+namespace pbrt {
+
 // Sphere Method Definitions
 Bounds3f Sphere::ObjectBound() const {
     return Bounds3f(Point3f(-radius, -radius, zMin),
@@ -272,18 +274,15 @@ Interaction Sphere::Sample(const Interaction &ref, const Point2f &u,
     Float sinAlpha = std::sqrt(std::max((Float)0, 1 - cosAlpha * cosAlpha));
 
     // Compute surface normal and sampled point on sphere
-    Vector3f nObj =
+    Vector3f nWorld =
         SphericalDirection(sinAlpha, cosAlpha, phi, -wcX, -wcY, -wc);
-    Point3f pObj = radius * Point3f(nObj.x, nObj.y, nObj.z);
+    Point3f pWorld = pCenter + radius * Point3f(nWorld.x, nWorld.y, nWorld.z);
 
     // Return _Interaction_ for sampled point on sphere
     Interaction it;
-
-    // Reproject _pObj_ to sphere surface and compute _pObjError_
-    pObj *= radius / Distance(pObj, Point3f(0, 0, 0));
-    Vector3f pObjError = gamma(5) * Abs((Vector3f)pObj);
-    it.p = (*ObjectToWorld)(pObj, pObjError, &it.pError);
-    it.n = (*ObjectToWorld)(Normal3f(nObj));
+    it.p = pWorld;
+    it.pError = gamma(5) * Abs((Vector3f)pWorld);
+    it.n = Normal3f(nWorld);
     if (reverseOrientation) it.n *= -1;
 
     // Uniform cone PDF.
@@ -306,6 +305,15 @@ Float Sphere::Pdf(const Interaction &ref, const Vector3f &wi) const {
     return UniformConePdf(cosThetaMax);
 }
 
+Float Sphere::SolidAngle(const Point3f &p, int nSamples) const {
+    Point3f pCenter = (*ObjectToWorld)(Point3f(0, 0, 0));
+    if (DistanceSquared(p, pCenter) <= radius * radius)
+        return 4 * Pi;
+    Float sinTheta2 = radius * radius / DistanceSquared(p, pCenter);
+    Float cosTheta = std::sqrt(std::max((Float)0, 1 - sinTheta2));
+    return (2 * Pi * (1 - cosTheta));
+}
+
 std::shared_ptr<Shape> CreateSphereShape(const Transform *o2w,
                                          const Transform *w2o,
                                          bool reverseOrientation,
@@ -317,3 +325,5 @@ std::shared_ptr<Shape> CreateSphereShape(const Transform *o2w,
     return std::make_shared<Sphere>(o2w, w2o, reverseOrientation, radius, zmin,
                                     zmax, phimax);
 }
+
+}  // namespace pbrt

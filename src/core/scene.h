@@ -40,8 +40,11 @@
 
 // core/scene.h*
 #include "pbrt.h"
+#include "geometry.h"
 #include "primitive.h"
-#include "integrator.h"
+#include "light.h"
+
+namespace pbrt {
 
 // Scene Declarations
 class Scene {
@@ -75,5 +78,7 @@ class Scene {
     std::shared_ptr<Primitive> aggregate;
     Bounds3f worldBound;
 };
+
+}  // namespace pbrt
 
 #endif  // PBRT_CORE_SCENE_H

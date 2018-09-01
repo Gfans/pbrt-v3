@@ -9,9 +9,12 @@
 #include "sampling.h"
 #include "shapes/cone.h"
 #include "shapes/cylinder.h"
+#include "shapes/disk.h"
 #include "shapes/paraboloid.h"
 #include "shapes/sphere.h"
 #include "shapes/triangle.h"
+
+using namespace pbrt;
 
 static Float pExp(RNG &rng, Float exp = 8.) {
     Float logu = Lerp(rng.UniformFloat(), -exp, exp);
@@ -238,7 +241,6 @@ TEST(Triangle, Sampling) {
             Point2f u{RadicalInverse(0, j), RadicalInverse(1, j)};
             Float pdf;
             Interaction pTri = tri->Sample(ref, u, &pdf);
-            Vector3f wi = Normalize(pTri.p - pc);
             EXPECT_GT(pdf, 0);
             triSampleEstimate += 1. / (count * pdf);
         }
@@ -292,8 +294,7 @@ TEST(Triangle, SolidAngle) {
         for (int j = 0; j < count; ++j) {
             Point2f u{RadicalInverse(0, j), RadicalInverse(1, j)};
             Float pdf;
-            Interaction pTri = tri->Sample(ref, u, &pdf);
-            Vector3f wi = Normalize(pTri.p - pc);
+            (void)tri->Sample(ref, u, &pdf);
             EXPECT_GT(pdf, 0);
             triSampleEstimate += 1. / (count * pdf);
         }
@@ -313,6 +314,59 @@ TEST(Triangle, SolidAngle) {
             << ", tri sampling: " << triSampleEstimate << ", pc = " << pc
             << ", tri index " << i;
     }
+}
+
+// Use Quasi Monte Carlo with uniform sphere sampling to esimate the solid
+// angle subtended by the given shape from the given point.
+static Float mcSolidAngle(const Point3f &p, const Shape &shape, int nSamples) {
+    int nHits = 0;
+    for (int i = 0; i < nSamples; ++i) {
+        Point2f u{RadicalInverse(0, i), RadicalInverse(1, i)};
+        Vector3f w = UniformSampleSphere(u);
+        if (shape.IntersectP(Ray(p, w), false)) ++nHits;
+    }
+    return nHits / (UniformSpherePdf() * nSamples);
+}
+
+TEST(Sphere, SolidAngle) {
+    Transform tr = Translate(Vector3f(1, .5, -.8)) * RotateX(30);
+    Transform trInv = Inverse(tr);
+    Sphere sphere(&tr, &trInv, false, 1, -1, 1, 360);
+
+    // Make sure we get a subtended solid angle of 4pi for a point
+    // inside the sphere.
+    Point3f pInside(1, .9, -.8);
+    const int nSamples = 128 * 1024;
+    EXPECT_LT(std::abs(mcSolidAngle(pInside, sphere, nSamples) - 4 * Pi), .01);
+    EXPECT_LT(std::abs(sphere.SolidAngle(pInside, nSamples) - 4 * Pi), .01);
+
+    // Now try a point outside the sphere
+    Point3f p(-.25, -1, .8);
+    Float mcSA = mcSolidAngle(p, sphere, nSamples);
+    Float sphereSA = sphere.SolidAngle(p, nSamples);
+    EXPECT_LT(std::abs(mcSA - sphereSA), .001);
+}
+
+TEST(Cylinder, SolidAngle) {
+    Transform tr = Translate(Vector3f(1, .5, -.8)) * RotateX(30);
+    Transform trInv = Inverse(tr);
+    Cylinder cyl(&tr, &trInv, false, .25, -1, 1, 360.);
+
+    Point3f p(.5, .25, .5);
+    const int nSamples = 128 * 1024;
+    Float solidAngle = mcSolidAngle(p, cyl, nSamples);
+    EXPECT_LT(std::abs(solidAngle - cyl.SolidAngle(p, nSamples)), .001);
+}
+
+TEST(Disk, SolidAngle) {
+    Transform tr = Translate(Vector3f(1, .5, -.8)) * RotateX(30);
+    Transform trInv = Inverse(tr);
+    Disk disk(&tr, &trInv, false, 0, 1.25, 0, 360);
+
+    Point3f p(.5, -.8, .5);
+    const int nSamples = 128 * 1024;
+    Float solidAngle = mcSolidAngle(p, disk, nSamples);
+    EXPECT_LT(std::abs(solidAngle - disk.SolidAngle(p, nSamples)), .001);
 }
 
 // Check for incorrect self-intersection: assumes that the shape is convex,
@@ -371,7 +425,7 @@ static void TestReintersectConvex(Shape &shape, RNG &rng) {
 }
 
 TEST(FullSphere, Reintersect) {
-    for (int i = 0; i < 1000; ++i) {
+    for (int i = 0; i < 100; ++i) {
         RNG rng(i);
         Transform identity;
         Float radius = pExp(rng, 4);
@@ -385,7 +439,7 @@ TEST(FullSphere, Reintersect) {
 }
 
 TEST(ParialSphere, Normal) {
-    for (int i = 0; i < 1000; ++i) {
+    for (int i = 0; i < 100; ++i) {
         RNG rng(i);
         Transform identity;
         Float radius = pExp(rng, 4);
@@ -424,7 +478,7 @@ TEST(ParialSphere, Normal) {
 }
 
 TEST(PartialSphere, Reintersect) {
-    for (int i = 0; i < 1000; ++i) {
+    for (int i = 0; i < 100; ++i) {
         RNG rng(i);
         Transform identity;
         Float radius = pExp(rng, 4);
@@ -443,7 +497,7 @@ TEST(PartialSphere, Reintersect) {
 }
 
 TEST(Cylinder, Reintersect) {
-    for (int i = 0; i < 1000; ++i) {
+    for (int i = 0; i < 100; ++i) {
         RNG rng(i);
         Transform identity;
         Float radius = pExp(rng, 4);
@@ -486,3 +540,20 @@ TEST(Paraboloid, Reintersect) {
     }
 }
 #endif
+
+TEST(Triangle, BadCases) {
+    Transform identity;
+    int indices[3] = { 0, 1, 2 };
+    Point3f p[3] = {  Point3f( -1113.45459, -79.049614, -56.2431908),
+                      Point3f(-1113.45459, -87.0922699, -56.2431908),
+                      Point3f(-1113.45459, -79.2090149, -56.2431908) };
+    auto mesh = CreateTriangleMesh(&identity, &identity, false,
+                                   1, indices, 3, p, nullptr, nullptr, nullptr,
+                                   nullptr, nullptr);
+
+    Ray ray(Point3f( -1081.47925, 99.9999542, 87.7701111),
+            Vector3f(-32.1072998, -183.355865, -144.607635), 0.9999);
+    Float thit;
+    SurfaceInteraction isect;
+    EXPECT_FALSE(mesh[0]->Intersect(ray, &thit, &isect));
+}

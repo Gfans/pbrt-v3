@@ -41,6 +41,11 @@
 // media/grid.h*
 #include "medium.h"
 #include "transform.h"
+#include "stats.h"
+
+namespace pbrt {
+
+STAT_MEMORY_COUNTER("Memory/Volume density grid", densityBytes);
 
 // GridDensityMedium Declarations
 class GridDensityMedium : public Medium {
@@ -57,6 +62,7 @@ class GridDensityMedium : public Medium {
           nz(nz),
           WorldToMedium(Inverse(mediumToWorld)),
           density(new Float[nx * ny * nz]) {
+        densityBytes += nx * ny * nz * sizeof(Float);
         memcpy((Float *)density.get(), d, sizeof(Float) * nx * ny * nz);
         // Precompute values for Monte Carlo sampling of _GridDensityMedium_
         sigma_t = (sigma_a + sigma_s)[0];
@@ -90,5 +96,7 @@ class GridDensityMedium : public Medium {
     Float sigma_t;
     Float invMaxDensity;
 };
+
+}  // namespace pbrt
 
 #endif  // PBRT_MEDIA_GRID_H

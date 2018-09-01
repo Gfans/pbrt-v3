@@ -39,11 +39,13 @@
 #include <libgen.h>
 #endif
 
+namespace pbrt {
+
 static std::string searchDirectory;
 
 #ifdef PBRT_IS_WINDOWS
 bool IsAbsolutePath(const std::string &filename) {
-    if (filename.size() == 0) return false;
+    if (filename.empty()) return false;
     return (filename[0] == '\\' || filename[0] == '/' ||
             filename.find(':') != std::string::npos);
 }
@@ -57,7 +59,7 @@ std::string AbsolutePath(const std::string &filename) {
 }
 
 std::string ResolveFilename(const std::string &filename) {
-    if (searchDirectory.size() == 0 || filename.size() == 0)
+    if (searchDirectory.empty() || filename.empty())
         return filename;
     else if (IsAbsolutePath(filename))
         return filename;
@@ -101,7 +103,7 @@ std::string AbsolutePath(const std::string &filename) {
 }
 
 std::string ResolveFilename(const std::string &filename) {
-    if (searchDirectory.size() == 0 || filename.size() == 0)
+    if (searchDirectory.empty() || filename.empty())
         return filename;
     else if (IsAbsolutePath(filename))
         return filename;
@@ -123,3 +125,5 @@ std::string DirectoryContaining(const std::string &filename) {
 void SetSearchDirectory(const std::string &dirname) {
     searchDirectory = dirname;
 }
+
+}  // namespace pbrt

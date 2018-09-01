@@ -35,6 +35,9 @@
 #include "sampler.h"
 #include "sampling.h"
 #include "camera.h"
+#include "stats.h"
+
+namespace pbrt {
 
 // Sampler Method Definitions
 Sampler::~Sampler() {}
@@ -113,6 +116,7 @@ bool PixelSampler::SetSampleNumber(int64_t sampleNum) {
 }
 
 Float PixelSampler::Get1D() {
+    ProfilePhase _(Prof::GetSample);
     CHECK_LT(currentPixelSampleIndex, samplesPerPixel);
     if (current1DDimension < samples1D.size())
         return samples1D[current1DDimension++][currentPixelSampleIndex];
@@ -121,6 +125,7 @@ Float PixelSampler::Get1D() {
 }
 
 Point2f PixelSampler::Get2D() {
+    ProfilePhase _(Prof::GetSample);
     CHECK_LT(currentPixelSampleIndex, samplesPerPixel);
     if (current2DDimension < samples2D.size())
         return samples2D[current2DDimension++][currentPixelSampleIndex];
@@ -129,6 +134,7 @@ Point2f PixelSampler::Get2D() {
 }
 
 void GlobalSampler::StartPixel(const Point2i &p) {
+    ProfilePhase _(Prof::StartPixel);
     Sampler::StartPixel(p);
     dimension = 0;
     intervalSampleIndex = GetIndexForSample(0);
@@ -172,12 +178,14 @@ bool GlobalSampler::SetSampleNumber(int64_t sampleNum) {
 }
 
 Float GlobalSampler::Get1D() {
+    ProfilePhase _(Prof::GetSample);
     if (dimension >= arrayStartDim && dimension < arrayEndDim)
         dimension = arrayEndDim;
     return SampleDimension(intervalSampleIndex, dimension++);
 }
 
 Point2f GlobalSampler::Get2D() {
+    ProfilePhase _(Prof::GetSample);
     if (dimension + 1 >= arrayStartDim && dimension < arrayEndDim)
         dimension = arrayEndDim;
     Point2f p(SampleDimension(intervalSampleIndex, dimension),
@@ -185,3 +193,5 @@ Point2f GlobalSampler::Get2D() {
     dimension += 2;
     return p;
 }
+
+}  // namespace pbrt

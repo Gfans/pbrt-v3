@@ -41,6 +41,8 @@
 #include "stats.h"
 #include <stdarg.h>
 
+namespace pbrt {
+
 // BxDF Utility Functions
 Float FrDielectric(Float cosThetaI, Float etaI, Float etaT) {
     cosThetaI = Clamp(cosThetaI, -1, 1);
@@ -512,7 +514,6 @@ std::string FresnelSpecular::ToString() const {
     return std::string("[ FresnelSpecular R: ") + R.ToString() +
            std::string(" T: ") + T.ToString() +
            StringPrintf(" etaA: %f etaB: %f ", etaA, etaB) +
-           std::string(" fresnel: ") + fresnel.ToString() +
            std::string(" mode : ") +
            (mode == TransportMode::Radiance ? std::string("RADIANCE")
                                             : std::string("IMPORTANCE")) +
@@ -609,8 +610,8 @@ Float FourierBSDF::Pdf(const Vector3f &wo, const Vector3f &wi) const {
     if (!bsdfTable.GetWeightsAndOffset(muI, &offsetI, weightsI) ||
         !bsdfTable.GetWeightsAndOffset(muO, &offsetO, weightsO))
         return 0;
-    Float *ak = ALLOCA(Float, bsdfTable.mMax * bsdfTable.nChannels);
-    memset(ak, 0, bsdfTable.mMax * bsdfTable.nChannels * sizeof(Float));
+    Float *ak = ALLOCA(Float, bsdfTable.mMax);
+    memset(ak, 0, bsdfTable.mMax * sizeof(Float));
     int mMax = 0;
     for (int o = 0; o < 4; ++o) {
         for (int i = 0; i < 4; ++i) {
@@ -721,7 +722,7 @@ Spectrum BSDF::Sample_f(const Vector3f &woWorld, Vector3f *wiWorld,
             bxdf = bxdfs[i];
             break;
         }
-    CHECK_NOTNULL(bxdf);
+    CHECK(bxdf != nullptr);
     VLOG(2) << "BSDF::Sample_f chose comp = " << comp << " / matching = " <<
         matchingComps << ", bxdf: " << bxdf->ToString();
 
@@ -752,7 +753,7 @@ Spectrum BSDF::Sample_f(const Vector3f &woWorld, Vector3f *wiWorld,
     if (matchingComps > 1) *pdf /= matchingComps;
 
     // Compute value of BSDF for sampled direction
-    if (!(bxdf->type & BSDF_SPECULAR) && matchingComps > 1) {
+    if (!(bxdf->type & BSDF_SPECULAR)) {
         bool reflect = Dot(*wiWorld, ng) * Dot(woWorld, ng) > 0;
         f = 0.;
         for (int i = 0; i < nBxDFs; ++i)
@@ -789,3 +790,5 @@ std::string BSDF::ToString() const {
         s += StringPrintf("\n  bxdfs[%d]: ", i) + bxdfs[i]->ToString();
     return s + std::string(" ]");
 }
+
+}  // namespace pbrt

@@ -35,6 +35,9 @@
 #include "samplers/zerotwosequence.h"
 #include "lowdiscrepancy.h"
 #include "paramset.h"
+#include "stats.h"
+
+namespace pbrt {
 
 // ZeroTwoSequenceSampler Method Definitions
 ZeroTwoSequenceSampler::ZeroTwoSequenceSampler(int64_t samplesPerPixel,
@@ -48,6 +51,7 @@ ZeroTwoSequenceSampler::ZeroTwoSequenceSampler(int64_t samplesPerPixel,
 }
 
 void ZeroTwoSequenceSampler::StartPixel(const Point2i &p) {
+    ProfilePhase _(Prof::StartPixel);
     // Generate 1D and 2D pixel sample components using $(0,2)$-sequence
     for (size_t i = 0; i < samples1D.size(); ++i)
         VanDerCorput(1, samplesPerPixel, &samples1D[i][0], rng);
@@ -76,3 +80,5 @@ ZeroTwoSequenceSampler *CreateZeroTwoSequenceSampler(const ParamSet &params) {
     if (PbrtOptions.quickRender) nsamp = 1;
     return new ZeroTwoSequenceSampler(nsamp, sd);
 }
+
+}  // namespace pbrt

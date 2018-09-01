@@ -45,6 +45,8 @@
 #include "samplers/halton.h"
 #include "stats.h"
 
+namespace pbrt {
+
 STAT_RATIO(
     "Stochastic Progressive Photon Mapping/Visible points checked per photon "
     "intersection",
@@ -156,6 +158,8 @@ void SPPMIntegrator::Render(const Scene &scene) {
                     RayDifferential ray;
                     Spectrum beta =
                         camera->GenerateRayDifferential(cameraSample, &ray);
+                    if (beta.IsBlack())
+                        continue;
                     ray.ScaleDifferentials(invSqrtSPP);
 
                     // Follow camera ray path until a visible point is created
@@ -497,7 +501,9 @@ void SPPMIntegrator::Render(const Scene &scene) {
 
 Integrator *CreateSPPMIntegrator(const ParamSet &params,
                                  std::shared_ptr<const Camera> camera) {
-    int nIterations = params.FindOneInt("numiterations", 64);
+    int nIterations =
+        params.FindOneInt("iterations",
+                          params.FindOneInt("numiterations", 64));
     int maxDepth = params.FindOneInt("maxdepth", 5);
     int photonsPerIter = params.FindOneInt("photonsperiteration", -1);
     int writeFreq = params.FindOneInt("imagewritefrequency", 1 << 31);
@@ -506,3 +512,5 @@ Integrator *CreateSPPMIntegrator(const ParamSet &params,
     return new SPPMIntegrator(camera, nIterations, photonsPerIter, maxDepth,
                               radius, writeFreq);
 }
+
+}  // namespace pbrt

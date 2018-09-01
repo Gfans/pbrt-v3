@@ -40,6 +40,9 @@
 #include "reflection.h"
 #include "stats.h"
 #include "lowdiscrepancy.h"
+#include <array>
+
+namespace pbrt {
 
 STAT_PERCENT("Camera/Rays vignetted by lens system", vignettedRays, totalRays);
 
@@ -85,6 +88,13 @@ RealisticCamera::RealisticCamera(const AnimatedTransform &CameraToWorld,
         Float r1 = (Float)(i + 1) / nSamples * film->diagonal / 2;
         exitPupilBounds[i] = BoundExitPupil(r0, r1);
     }, nSamples);
+
+    if (simpleWeighting)
+        Warning("\"simpleweighting\" option with RealisticCamera no longer "
+                "necessarily matches regular camera images. Further, pixel "
+                "values will vary a bit depending on the aperture size. See "
+                "this discussion for details: "
+                "https://github.com/mmp/pbrt-v3/issues/162#issuecomment-348625837");
 }
 
 bool RealisticCamera::TraceLensesFromFilm(const Ray &rCamera, Ray *rOut) const {
@@ -101,9 +111,13 @@ bool RealisticCamera::TraceLensesFromFilm(const Ray &rCamera, Ray *rOut) const {
         Float t;
         Normal3f n;
         bool isStop = (element.curvatureRadius == 0);
-        if (isStop)
+        if (isStop) {
+            // The refracted ray computed in the previous lens element
+            // interface may be pointed towards film plane(+z) in some
+            // extreme situations; in such cases, 't' becomes negative.
+            if (rLens.d.z >= 0.0) return false;
             t = (elementZ - rLens.o.z) / rLens.d.z;
-        else {
+        } else {
             Float radius = element.curvatureRadius;
             Float zCenter = elementZ + element.curvatureRadius;
             if (!IntersectSphericalElement(radius, zCenter, rLens, &t, &n))
@@ -450,9 +464,10 @@ Float RealisticCamera::FocusThickLens(Float focusDistance) {
     // Compute translation of lens, _delta_, to focus at _focusDistance_
     Float f = fz[0] - pz[0];
     Float z = -focusDistance;
+    Float c = (pz[1] - z - pz[0]) * (pz[1] - z - 4 * f - pz[0]);
+    CHECK_GT(c, 0) << "Coefficient must be positive. It looks focusDistance: " << focusDistance << " is too short for a given lenses configuration";
     Float delta =
-        0.5f * (pz[1] - z + pz[0] -
-                std::sqrt((pz[1] - z - pz[0]) * (pz[1] - z - 4 * f - pz[0])));
+        0.5f * (pz[1] - z + pz[0] - std::sqrt(c));
     return elementInterfaces.back().thickness + delta;
 }
 
@@ -480,11 +495,27 @@ Float RealisticCamera::FocusBinarySearch(Float focusDistance) {
 Float RealisticCamera::FocusDistance(Float filmDistance) {
     // Find offset ray from film center through lens
     Bounds2f bounds = BoundExitPupil(0, .001 * film->diagonal);
-    Float lu = 0.1f * bounds.pMax[0];
+
+    const std::array<Float, 3> scaleFactors = {0.1f, 0.01f, 0.001f};
+    Float lu = 0.0f;
+
     Ray ray;
-    if (!TraceLensesFromFilm(Ray(Point3f(0, 0, LensRearZ() - filmDistance),
-                                 Vector3f(lu, 0, filmDistance)),
-                             &ray)) {
+
+    // Try some different and decreasing scaling factor to find focus ray
+    // more quickly when `aperturediameter` is too small.
+    // (e.g. 2 [mm] for `aperturediameter` with wide.22mm.dat),
+    bool foundFocusRay = false;
+    for (Float scale : scaleFactors) {
+        lu = scale * bounds.pMax[0];
+        if (TraceLensesFromFilm(Ray(Point3f(0, 0, LensRearZ() - filmDistance),
+                                    Vector3f(lu, 0, filmDistance)),
+                                &ray)) {
+            foundFocusRay = true;
+            break;
+        }
+    }
+
+    if (!foundFocusRay) {
         Error(
             "Focus ray at lens pos(%f,0) didn't make it through the lenses "
             "with film distance %f?!??\n",
@@ -498,6 +529,7 @@ Float RealisticCamera::FocusDistance(Float filmDistance) {
     if (zFocus < 0) zFocus = Infinity;
     return zFocus;
 }
+
 
 Bounds2f RealisticCamera::BoundExitPupil(Float pFilmX0, Float pFilmX1) const {
     Bounds2f pupilBounds;
@@ -673,7 +705,7 @@ Float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const {
     Float cosTheta = Normalize(rFilm.d).z;
     Float cos4Theta = (cosTheta * cosTheta) * (cosTheta * cosTheta);
     if (simpleWeighting)
-        return cos4Theta;
+        return cos4Theta * exitPupilBoundsArea / exitPupilBounds[0].Area();
     else
         return (shutterClose - shutterOpen) *
                (cos4Theta * exitPupilBoundsArea) / (LensRearZ() * LensRearZ());
@@ -718,3 +750,5 @@ RealisticCamera *CreateRealisticCamera(const ParamSet &params,
                                apertureDiameter, focusDistance, simpleWeighting,
                                lensData, film, medium);
 }
+
+}  // namespace pbrt

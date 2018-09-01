@@ -46,6 +46,8 @@
 #include "stats.h"
 #include "parallel.h"
 
+namespace pbrt {
+
 // FilmTilePixel Declarations
 struct FilmTilePixel {
     Spectrum contribSum = 0.f;
@@ -118,6 +120,7 @@ class FilmTile {
     }
     void AddSample(const Point2f &pFilm, Spectrum L,
                    Float sampleWeight = 1.) {
+        ProfilePhase _(Prof::AddFilmSample);
         if (L.y() > maxSampleLuminance)
             L *= maxSampleLuminance / L.y();
         // Compute sample's raster bounds
@@ -184,5 +187,7 @@ class FilmTile {
 };
 
 Film *CreateFilm(const ParamSet &params, std::unique_ptr<Filter> filter);
+
+}  // namespace pbrt
 
 #endif  // PBRT_CORE_FILM_H

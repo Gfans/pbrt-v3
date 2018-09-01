@@ -38,6 +38,8 @@
 #include "reflection.h"
 #include "stats.h"
 
+namespace pbrt {
+
 // SpotLight Method Definitions
 SpotLight::SpotLight(const Transform &LightToWorld,
                      const MediumInterface &mediumInterface, const Spectrum &I,
@@ -63,7 +65,7 @@ Float SpotLight::Falloff(const Vector3f &w) const {
     Vector3f wl = Normalize(WorldToLight(w));
     Float cosTheta = wl.z;
     if (cosTheta < cosTotalWidth) return 0;
-    if (cosTheta > cosFalloffStart) return 1;
+    if (cosTheta >= cosFalloffStart) return 1;
     // Compute falloff inside spotlight cone
     Float delta =
         (cosTheta - cosTotalWidth) / (cosFalloffStart - cosTotalWidth);
@@ -120,3 +122,5 @@ std::shared_ptr<SpotLight> CreateSpotLight(const Transform &l2w,
     return std::make_shared<SpotLight>(light2world, medium, I * sc, coneangle,
                                        coneangle - conedelta);
 }
+
+}  // namespace pbrt

@@ -42,6 +42,8 @@
 #include "pbrt.h"
 #include "geometry.h"
 
+namespace pbrt {
+
 // MicrofacetDistribution Declarations
 class MicrofacetDistribution {
   public:
@@ -53,7 +55,7 @@ class MicrofacetDistribution {
         //    if (Dot(w, wh) * CosTheta(w) < 0.) return 0.;
         return 1 / (1 + Lambda(w));
     }
-    Float G(const Vector3f &wo, const Vector3f &wi) const {
+    virtual Float G(const Vector3f &wo, const Vector3f &wi) const {
         return 1 / (1 + Lambda(wo) + Lambda(wi));
     }
     virtual Vector3f Sample_wh(const Vector3f &wo, const Point2f &u) const = 0;
@@ -124,5 +126,7 @@ inline Float TrowbridgeReitzDistribution::RoughnessToAlpha(Float roughness) {
     return 1.62142f + 0.819955f * x + 0.1734f * x * x + 0.0171201f * x * x * x +
            0.000640711f * x * x * x * x;
 }
+
+}  // namespace pbrt
 
 #endif  // PBRT_CORE_MICROFACET_H

@@ -41,6 +41,9 @@
 // core/geometry.h*
 #include "pbrt.h"
 #include "stringprint.h"
+#include <iterator>
+
+namespace pbrt {
 
 template <typename T>
 inline bool isNaN(const T x) {
@@ -683,7 +686,7 @@ class Bounds2 {
         pMin = Point2<T>(maxNum, maxNum);
         pMax = Point2<T>(minNum, minNum);
     }
-    Bounds2(const Point2<T> &p) : pMin(p), pMax(p) {}
+    explicit Bounds2(const Point2<T> &p) : pMin(p), pMax(p) {}
     Bounds2(const Point2<T> &p1, const Point2<T> &p2) {
         pMin = Point2<T>(std::min(p1.x, p2.x), std::min(p1.y, p2.y));
         pMax = Point2<T>(std::max(p1.x, p2.x), std::max(p1.y, p2.y));
@@ -720,8 +723,8 @@ class Bounds2 {
         return b.pMin != pMin || b.pMax != pMax;
     }
     Point2<T> Lerp(const Point2f &t) const {
-        return Point2<T>(::Lerp(t.x, pMin.x, pMax.x),
-                         ::Lerp(t.y, pMin.y, pMax.y));
+        return Point2<T>(pbrt::Lerp(t.x, pMin.x, pMax.x),
+                         pbrt::Lerp(t.y, pMin.y, pMax.y));
     }
     Vector2<T> Offset(const Point2<T> &p) const {
         Vector2<T> o = p - pMin;
@@ -752,7 +755,7 @@ class Bounds3 {
         pMin = Point3<T>(maxNum, maxNum, maxNum);
         pMax = Point3<T>(minNum, minNum, minNum);
     }
-    Bounds3(const Point3<T> &p) : pMin(p), pMax(p) {}
+    explicit Bounds3(const Point3<T> &p) : pMin(p), pMax(p) {}
     Bounds3(const Point3<T> &p1, const Point3<T> &p2)
         : pMin(std::min(p1.x, p2.x), std::min(p1.y, p2.y),
                std::min(p1.z, p2.z)),
@@ -791,9 +794,9 @@ class Bounds3 {
             return 2;
     }
     Point3<T> Lerp(const Point3f &t) const {
-        return Point3<T>(::Lerp(t.x, pMin.x, pMax.x),
-                         ::Lerp(t.y, pMin.y, pMax.y),
-                         ::Lerp(t.z, pMin.z, pMax.z));
+        return Point3<T>(pbrt::Lerp(t.x, pMin.x, pMax.x),
+                         pbrt::Lerp(t.y, pMin.y, pMax.y),
+                         pbrt::Lerp(t.z, pMin.z, pMax.z));
     }
     Vector3<T> Offset(const Point3<T> &p) const {
         Vector3<T> o = p - pMin;
@@ -827,7 +830,7 @@ typedef Bounds2<Float> Bounds2f;
 typedef Bounds2<int> Bounds2i;
 typedef Bounds3<Float> Bounds3f;
 typedef Bounds3<int> Bounds3i;
-#include <iterator>
+
 class Bounds2iIterator : public std::forward_iterator_tag {
   public:
     Bounds2iIterator(const Bounds2i &b, const Point2i &pt)
@@ -1245,31 +1248,30 @@ inline Point3<T> &Bounds3<T>::operator[](int i) {
 
 template <typename T>
 Bounds3<T> Union(const Bounds3<T> &b, const Point3<T> &p) {
-    return Bounds3<T>(
-        Point3<T>(std::min(b.pMin.x, p.x), std::min(b.pMin.y, p.y),
-                  std::min(b.pMin.z, p.z)),
-        Point3<T>(std::max(b.pMax.x, p.x), std::max(b.pMax.y, p.y),
-                  std::max(b.pMax.z, p.z)));
+    Bounds3<T> ret;
+    ret.pMin = Min(b.pMin, p);
+    ret.pMax = Max(b.pMax, p);
+    return ret;
 }
 
 template <typename T>
 Bounds3<T> Union(const Bounds3<T> &b1, const Bounds3<T> &b2) {
-    return Bounds3<T>(Point3<T>(std::min(b1.pMin.x, b2.pMin.x),
-                                std::min(b1.pMin.y, b2.pMin.y),
-                                std::min(b1.pMin.z, b2.pMin.z)),
-                      Point3<T>(std::max(b1.pMax.x, b2.pMax.x),
-                                std::max(b1.pMax.y, b2.pMax.y),
-                                std::max(b1.pMax.z, b2.pMax.z)));
+    Bounds3<T> ret;
+    ret.pMin = Min(b1.pMin, b2.pMin);
+    ret.pMax = Max(b1.pMax, b2.pMax);
+    return ret;
 }
 
 template <typename T>
 Bounds3<T> Intersect(const Bounds3<T> &b1, const Bounds3<T> &b2) {
-    return Bounds3<T>(Point3<T>(std::max(b1.pMin.x, b2.pMin.x),
-                                std::max(b1.pMin.y, b2.pMin.y),
-                                std::max(b1.pMin.z, b2.pMin.z)),
-                      Point3<T>(std::min(b1.pMax.x, b2.pMax.x),
-                                std::min(b1.pMax.y, b2.pMax.y),
-                                std::min(b1.pMax.z, b2.pMax.z)));
+    // Important: assign to pMin/pMax directly and don't run the Bounds2()
+    // constructor, since it takes min/max of the points passed to it.  In
+    // turn, that breaks returning an invalid bound for the case where we
+    // intersect non-overlapping bounds (as we'd like to happen).
+    Bounds3<T> ret;
+    ret.pMin = Max(b1.pMin, b2.pMin);
+    ret.pMax = Min(b1.pMax, b2.pMax);
+    return ret;
 }
 
 template <typename T>
@@ -1331,26 +1333,29 @@ inline Bounds2iIterator end(const Bounds2i &b) {
 
 template <typename T>
 Bounds2<T> Union(const Bounds2<T> &b, const Point2<T> &p) {
-    Bounds2<T> ret(Point2<T>(std::min(b.pMin.x, p.x), std::min(b.pMin.y, p.y)),
-                   Point2<T>(std::max(b.pMax.x, p.x), std::max(b.pMax.y, p.y)));
+    Bounds2<T> ret;
+    ret.pMin = Min(b.pMin, p);
+    ret.pMax = Max(b.pMax, p);
     return ret;
 }
 
 template <typename T>
 Bounds2<T> Union(const Bounds2<T> &b, const Bounds2<T> &b2) {
-    Bounds2<T> ret(
-        Point2<T>(std::min(b.pMin.x, b2.pMin.x), std::min(b.pMin.y, b2.pMin.y)),
-        Point2<T>(std::max(b.pMax.x, b2.pMax.x),
-                  std::max(b.pMax.y, b2.pMax.y)));
+    Bounds2<T> ret;
+    ret.pMin = Min(b.pMin, b2.pMin);
+    ret.pMax = Max(b.pMax, b2.pMax);
     return ret;
 }
 
 template <typename T>
-Bounds2<T> Intersect(const Bounds2<T> &b, const Bounds2<T> &b2) {
-    Bounds2<T> ret(
-        Point2<T>(std::max(b.pMin.x, b2.pMin.x), std::max(b.pMin.y, b2.pMin.y)),
-        Point2<T>(std::min(b.pMax.x, b2.pMax.x),
-                  std::min(b.pMax.y, b2.pMax.y)));
+Bounds2<T> Intersect(const Bounds2<T> &b1, const Bounds2<T> &b2) {
+    // Important: assign to pMin/pMax directly and don't run the Bounds2()
+    // constructor, since it takes min/max of the points passed to it.  In
+    // turn, that breaks returning an invalid bound for the case where we
+    // intersect non-overlapping bounds (as we'd like to happen).
+    Bounds2<T> ret;
+    ret.pMin = Max(b1.pMin, b2.pMin);
+    ret.pMax = Min(b1.pMax, b2.pMax);
     return ret;
 }
 
@@ -1474,5 +1479,7 @@ inline Float SphericalPhi(const Vector3f &v) {
     Float p = std::atan2(v.y, v.x);
     return (p < 0) ? (p + 2 * Pi) : p;
 }
+
+}  // namespace pbrt
 
 #endif  // PBRT_CORE_GEOMETRY_H

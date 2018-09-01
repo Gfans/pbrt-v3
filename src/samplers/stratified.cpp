@@ -35,9 +35,13 @@
 #include "samplers/stratified.h"
 #include "paramset.h"
 #include "sampling.h"
+#include "stats.h"
+
+namespace pbrt {
 
 // StratifiedSampler Method Definitions
 void StratifiedSampler::StartPixel(const Point2i &p) {
+    ProfilePhase _(Prof::StartPixel);
     // Generate single stratified samples for the pixel
     for (size_t i = 0; i < samples1D.size(); ++i) {
         StratifiedSample1D(&samples1D[i][0], xPixelSamples * yPixelSamples, rng,
@@ -80,3 +84,5 @@ StratifiedSampler *CreateStratifiedSampler(const ParamSet &params) {
     if (PbrtOptions.quickRender) xsamp = ysamp = 1;
     return new StratifiedSampler(xsamp, ysamp, jitter, sd);
 }
+
+}  // namespace pbrt
